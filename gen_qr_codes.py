@@ -1,16 +1,22 @@
-# Importing the PIL library
-
-import qrcode
+import argparse
 import os
+import qrcode
 from PIL import Image, ImageDraw, ImageOps, ImageFont
 from PIL.Image import Resampling
 from PyPDF4 import PdfFileMerger
 from itertools import islice
 
-# Parameters:
 
-starting_num = 100001
-total_qr_codes = 50
+# Command Line Arguments:
+
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument('starting_num', metavar='s', type=int,
+                    help='The identifier for the first qr code, e.g. 100 results in the series 100, 101, 102...')
+parser.add_argument('total_qr_codes', metavar='n', type=int,
+                    help='How many total QR codes to generate, e.g. 10 will create ten QR codes.')
+args = parser.parse_args()
+starting_num = args.starting_num
+total_qr_codes = args.total_qr_codes
 
 
 # Constants:
@@ -40,19 +46,14 @@ def create_qr_code_image_objects():
     for i in range(total_qr_codes):
         curr_num = starting_num + i
 
-        # generate qr code
+        # Generate qr code.
         data = str(curr_num)
         qr_code_img = qrcode.make(data)
         qr_code_img = qr_code_img.resize(QR_SIZE, resample=Resampling.BOX)
 
-        # save img to a file
-        # qr_code_img.save('filename')
-
-        # Call draw Method to add 2D graphics in an image
-        i1 = ImageDraw.Draw(qr_code_img)
-
         # Add text to the qr code (attempt to center at top)
-        i1.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
+        draw_canvas = ImageDraw.Draw(qr_code_img)
+        draw_canvas.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
 
         yield qr_code_img
 
@@ -62,27 +63,27 @@ def create_pdf_page_of_qr_codes(qr_code_image_generator):
     Returns a tuple of the PIL image and the number of qr_codes written to it.
     """
 
-    # Create canvas for the final image with total canvas_size
+    # Create canvas for the final image with total canvas_size.
     pdf_canvas = Image.new('RGB', PDF_SIZE, color="#FFFFFF")
 
     pdf_width = PDF_SIZE[0] - BLEED
     pdf_height = PDF_SIZE[1] - BLEED
 
-    # Paste remaining_images into final image
+    # Paste as many qr codes into pdf_canvas as possible.
     row, col, idx = BLEED, BLEED, 0
-    resized_qr_code_img_obj = ImageOps.fit(next(qr_code_image_generator), QR_SIZE, Resampling.LANCZOS)
-    while row + QR_SIZE[0] + VERT_SPACING_BETWEEN_QR_CODES <= pdf_height and resized_qr_code_img_obj:
-        while col + QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES <= pdf_width and resized_qr_code_img_obj:
+    while row + QR_SIZE[0] + VERT_SPACING_BETWEEN_QR_CODES <= pdf_height:
+        while col + QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES <= pdf_width:
+            try:
+                resized_qr_code_img_obj = ImageOps.fit(next(qr_code_image_generator), QR_SIZE, Resampling.LANCZOS)
+            except StopIteration:
+                break
             pdf_canvas.paste(resized_qr_code_img_obj, (col, row))
             idx += 1
 
-            if col + QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES + QR_SIZE[0] < pdf_width:
-                col += QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES
-            else:
-                col = BLEED
-                row += QR_SIZE[1] + VERT_SPACING_BETWEEN_QR_CODES
-                break
-            resized_qr_code_img_obj = ImageOps.fit(next(qr_code_image_generator), QR_SIZE, Resampling.LANCZOS)
+            col += QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES
+
+        col = BLEED
+        row += QR_SIZE[1] + VERT_SPACING_BETWEEN_QR_CODES
 
     return pdf_canvas, idx
 
@@ -93,7 +94,7 @@ def save_pdfs_in_pages(qr_code_image_generator):
     Returns a list of relative filepaths to the newly created pdf files.
     """
 
-    # Create a directory to put individual qr pdfs.
+    # Create a directory to put individual qr PDFs.
     try:
         os.mkdir(INDIVIDUAL_PAGES_DIR)
     except OSError:
