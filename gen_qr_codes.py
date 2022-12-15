@@ -34,7 +34,36 @@ FONT_SIZE = 40
 FONT = ImageFont.truetype("Roboto-Regular.ttf", FONT_SIZE)
 
 
-def write_qr_codes_to_page(images, start_idx=0):
+def create_qr_code_image_objects():
+    """Generates and returns a list of qr codes as PIL ImageDraw objects."""
+    r = []
+
+    for i in range(total_qr_codes):
+        curr_num = starting_num + i
+
+        # generate qr code
+        data = str(curr_num)
+        qr_code_img = qrcode.make(data)
+        qr_code_img = qr_code_img.resize(QR_SIZE, resample=Resampling.BOX)
+
+        # save img to a file
+        # qr_code_img.save('filename')
+
+        # Call draw Method to add 2D graphics in an image
+        i1 = ImageDraw.Draw(qr_code_img)
+
+        # Add text to the qr code (attempt to center at top)
+        i1.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
+
+        r.append(qr_code_img)
+
+    return r
+
+
+def create_pdf_page_of_qr_codes(images, start_idx=0):
+    """Creates a new PIL image the size of a page, and writes as many qr codes onto it as possible.
+    Returns a tuple of the PIL image and the number of qr_codes written to it.
+    """
     images = images[start_idx:]
 
     # Open images and resize them
@@ -67,48 +96,6 @@ def write_qr_codes_to_page(images, start_idx=0):
     return pdf_canvas, idx
 
 
-def create_qr_code_image_objects():
-    r = []
-
-    for i in range(total_qr_codes):
-        curr_num = starting_num + i
-
-        # generate qr code
-        data = str(curr_num)
-        qr_code_img = qrcode.make(data)
-        qr_code_img = qr_code_img.resize(QR_SIZE, resample=Resampling.BOX)
-
-        # save img to a file
-        # qr_code_img.save('filename')
-
-        # Call draw Method to add 2D graphics in an image
-        i1 = ImageDraw.Draw(qr_code_img)
-
-        # Add text to the qr code (attempt to center at top)
-        i1.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
-
-        r.append(qr_code_img)
-
-    return r
-
-
-def merge_pdfs(input_files: list, output_file: str):
-    """
-    Merge a list of PDF files and save the combined result into the `output_file`.
-    `page_range` to select a range of pages (behaving like Python's range() function) from the input files
-        e.g (0,2) -> First 2 pages
-        e.g (0,6,2) -> pages 1,3,5
-    """
-    # Note: `strict = False` ignores PdfReadError - Illegal Character error
-    merger = PdfFileMerger(strict=False)
-    for input_file in input_files:
-        merger.append(fileobj=open(input_file, 'rb'))
-
-    # Insert the pdf at specific page
-    merger.write(fileobj=open(output_file, 'wb'))
-    merger.close()
-
-
 def save_pdfs_in_pages(qr_images_list):
     """
     Writes the qr codes to files, each file a one page pdf. Fits as many qr codes in each file as possible.
@@ -125,8 +112,8 @@ def save_pdfs_in_pages(qr_images_list):
     pdf_filenames = []
     qr_code_num = starting_num
     while qr_code_num < starting_num + total_qr_codes:
-        new_img, r_idx = write_qr_codes_to_page(qr_images_list, qr_code_num - starting_num)
-        pdf_out_filename = f"{INDIVIDUAL_PAGES_DIR}/qr_codes_{qr_code_num}_through_{(qr_code_num + r_idx)}.pdf"
+        new_img, r_idx = create_pdf_page_of_qr_codes(qr_images_list, qr_code_num - starting_num)
+        pdf_out_filename = f"{INDIVIDUAL_PAGES_DIR}/qr_codes_{qr_code_num}_through_{(qr_code_num + r_idx - 1)}.pdf"
         new_img.save(pdf_out_filename)
         pdf_filenames.append(pdf_out_filename)
         qr_code_num += r_idx
@@ -134,7 +121,22 @@ def save_pdfs_in_pages(qr_images_list):
     return pdf_filenames
 
 
+def merge_pdfs(input_files: list, output_file: str):
+    """
+    Merge a list of PDF files and save the combined result into the `output_file`.
+    """
+    # Note: `strict = False` ignores PdfReadError - Illegal Character error
+    merger = PdfFileMerger(strict=False)
+    for input_file in input_files:
+        merger.append(fileobj=open(input_file, 'rb'))
+
+    # Insert the pdf at specific page
+    merger.write(fileobj=open(output_file, 'wb'))
+    merger.close()
+
+
 def generate_qr_codes():
+    """Main driver function."""
 
     # STEP 1: get a list of qr codes...
     qr_code_image_objects = create_qr_code_image_objects()
