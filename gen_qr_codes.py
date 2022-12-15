@@ -1,33 +1,45 @@
 # Importing the PIL library
 
 import qrcode
+import os
 from PIL import Image, ImageDraw, ImageOps, ImageFont
 from PIL.Image import Resampling
+from PyPDF4 import PdfFileMerger
+
 
 # Parameters:
 
+starting_num = 100001
+total_qr_codes = 50
+
+
+# Constants:
+
 # Print resolution for good quality 8.5x11 printing is 2550px W x 3300px H. (300 Pixels per Inch)
 # For excellent print quality, set the resolution of your 8.5x11 artwork at 3400px x 4400px.
-pdf_size = (2550, 3300)
-bleed = 70
+PDF_SIZE = (2550, 3300)
+BLEED = 120
+HORZ_SPACING_BETWEEN_QR_CODES = 20
+VERT_SPACING_BETWEEN_QR_CODES = 20
 
-starting_num = 100001
-num_qr_codes = 50
+ORIGINAL_QR_SIZE_IN_PIXELS = (290, 290)
+QR_CODE_SIZE_MULTIPLIER = 1.5
+QR_SIZE = (
+    int(ORIGINAL_QR_SIZE_IN_PIXELS[0] * QR_CODE_SIZE_MULTIPLIER),
+    int(ORIGINAL_QR_SIZE_IN_PIXELS[1] * QR_CODE_SIZE_MULTIPLIER)
+)
 
-orig_qr_size_in_pixels = (290, 290)
-qr_size_multiplier = 1.5
-font_size = 40
+INDIVIDUAL_PAGES_DIR = "individual_pages"
+FONT_SIZE = 40
+FONT = ImageFont.truetype("Roboto-Regular.ttf", FONT_SIZE)
 
 
-# Code:
-fnt = ImageFont.truetype("Roboto-Regular.ttf", font_size)
-
-def concat_images(images, start_idx=0):
+def write_qr_codes_to_page(images, start_idx=0):
     images = images[start_idx:]
 
     # Open images and resize them
-    width, height = pdf_size
-    images = [ImageOps.fit(image, qr_size, Resampling.LANCZOS)
+    width, height = PDF_SIZE
+    images = [ImageOps.fit(image, QR_SIZE, Resampling.LANCZOS)
               for image in images]
 
     # Create canvas for the final image with total canvas_size
@@ -35,36 +47,36 @@ def concat_images(images, start_idx=0):
     # image_size = (width * shape[1], height * shape[0])
     pdf_canvas = Image.new('RGB', (width, height), color="#FFFFFF")
 
-    pdf_width = width - bleed
-    pdf_height = height - bleed
+    pdf_width = width - BLEED
+    pdf_height = height - BLEED
 
     # Paste images into final image
-    row, col, idx = bleed, bleed, 0
-    while row + qr_size[0] <= pdf_height and idx < len(images):
-        while col + qr_size[0] <= pdf_width and idx < len(images):
+    row, col, idx = BLEED, BLEED, 0
+    while row + QR_SIZE[0] + VERT_SPACING_BETWEEN_QR_CODES <= pdf_height and idx < len(images):
+        while col + QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES <= pdf_width and idx < len(images):
             pdf_canvas.paste(images[idx], (col, row))
             idx += 1
 
-            if col + qr_size[0] + qr_size[0] < pdf_width:
-                col += qr_size[0]
+            if col + QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES + QR_SIZE[0] < pdf_width:
+                col += QR_SIZE[0] + HORZ_SPACING_BETWEEN_QR_CODES
             else:
-                col = bleed
-                row += qr_size[1]
+                col = BLEED
+                row += QR_SIZE[1] + VERT_SPACING_BETWEEN_QR_CODES
                 break
 
     return pdf_canvas, idx
 
 
-def gen_list_qr_codes():
+def create_qr_code_image_objects():
     r = []
 
-    for i in range(num_qr_codes):
+    for i in range(total_qr_codes):
         curr_num = starting_num + i
 
         # generate qr code
         data = str(curr_num)
         qr_code_img = qrcode.make(data)
-        qr_code_img = qr_code_img.resize(qr_size, resample=Resampling.BOX)
+        qr_code_img = qr_code_img.resize(QR_SIZE, resample=Resampling.BOX)
 
         # save img to a file
         # qr_code_img.save('filename')
@@ -73,24 +85,66 @@ def gen_list_qr_codes():
         i1 = ImageDraw.Draw(qr_code_img)
 
         # Add text to the qr code (attempt to center at top)
-        i1.text(((qr_size[0] // 2) - 60, 0), data, font=fnt)
+        i1.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
 
         r.append(qr_code_img)
 
     return r
 
-# get a font
 
-qr_size = (
-    int(orig_qr_size_in_pixels[0] * qr_size_multiplier),
-    int(orig_qr_size_in_pixels[1] * qr_size_multiplier)
-)
-qr_images_list = gen_list_qr_codes()
+def merge_pdfs(input_files: list, output_file: str):
+    """
+    Merge a list of PDF files and save the combined result into the `output_file`.
+    `page_range` to select a range of pages (behaving like Python's range() function) from the input files
+        e.g (0,2) -> First 2 pages
+        e.g (0,6,2) -> pages 1,3,5
+    """
+    # Note: `strict = False` ignores PdfReadError - Illegal Character error
+    merger = PdfFileMerger(strict=False)
+    for input_file in input_files:
+        merger.append(fileobj=open(input_file, 'rb'))
 
-pdf_out_num = 0
-idx = 0
-while idx < num_qr_codes:
-    new_img, r_idx = concat_images(qr_images_list, idx)
-    idx += r_idx
-    new_img.save(f"new_grid{pdf_out_num}.pdf")
-    pdf_out_num += 1
+    # Insert the pdf at specific page
+    merger.write(fileobj=open(output_file, 'wb'))
+    merger.close()
+
+
+def save_pdfs_in_pages(qr_images_list):
+    """
+    Writes the qr codes to files, each file a one page pdf. Fits as many qr codes in each file as possible.
+    Returns a list of relative filepaths to the newly created pdf files.
+    """
+
+    # Create a directory to put individual qr pdfs.
+    try:
+        os.mkdir(INDIVIDUAL_PAGES_DIR)
+    except OSError:
+        # In this case, the directory already exists.
+        pass
+
+    pdf_filenames = []
+    qr_code_num = starting_num
+    while qr_code_num < starting_num + total_qr_codes:
+        new_img, r_idx = write_qr_codes_to_page(qr_images_list, qr_code_num - starting_num)
+        pdf_out_filename = f"{INDIVIDUAL_PAGES_DIR}/qr_codes_{qr_code_num}_through_{(qr_code_num + r_idx)}.pdf"
+        new_img.save(pdf_out_filename)
+        pdf_filenames.append(pdf_out_filename)
+        qr_code_num += r_idx
+
+    return pdf_filenames
+
+
+def generate_qr_codes():
+
+    # STEP 1: get a list of qr codes...
+    qr_code_image_objects = create_qr_code_image_objects()
+
+    # STEP 2: save the qr codes into pages...
+    individual_pdf_filenames = save_pdfs_in_pages(qr_code_image_objects)
+
+    # STEP 3: merge all the individual pdfs into one pdf of multiple pages...
+    output_filename = f"qr_codes_{starting_num}_through_{(starting_num + total_qr_codes)}.pdf"
+    merge_pdfs(individual_pdf_filenames, output_filename)
+
+
+generate_qr_codes()
