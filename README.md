@@ -1,11 +1,8 @@
 #  Serial QR Code Generator
 
-Generate a multi-page PDF of serial QR Codes using a series of identifiers of your choice.
-Below is a single page of QR codes from 1 to 30:
-<br>
-`$ python3 gen_qr_codes.py 1 30`...
-<br>
-<img alt="one page of QR codes" src="single-page-teaser.png" height="400"/>
+Generate your own multi-page PDF of serial QR Codes. Perfect for printing on sticker sheets!
+<br><br>
+<img alt="one page of QR codes" src="multi-page-teaser.png" height="700"/>
 
 ## Usage
 ### How to install dependencies:
@@ -32,8 +29,8 @@ options:
 ```
 
 #### Example:
-`python3 gen_qr_codes.py 1 50`
-will generate 50 QR Codes starting with the first QR code corresponding to 1, 
+`$ python3 gen_qr_codes.py 1 50` <br>
+^ will generate 50 QR Codes starting with the first QR code corresponding to 1, 
 the second corresponding to 2, the third corresponding to 3...
 
 The output will be a multi-page PDF named `qr_codes_1_through_50.pdf` in the current directory.
