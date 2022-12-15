@@ -9,9 +9,9 @@ from itertools import islice
 
 # Command Line Arguments:
 
-parser = argparse.ArgumentParser(description='Process some integers.')
+parser = argparse.ArgumentParser(description='Generate n QR Codes starting with the number s.')
 parser.add_argument('starting_num', metavar='s', type=int,
-                    help='The identifier for the first qr code, e.g. 100 results in the series 100, 101, 102...')
+                    help='The identifying number for the first qr code, e.g. 100 results in the series 100, 101, 102...')
 parser.add_argument('total_qr_codes', metavar='n', type=int,
                     help='How many total QR codes to generate, e.g. 10 will create ten QR codes.')
 args = parser.parse_args()
@@ -53,7 +53,7 @@ def create_qr_code_image_objects():
 
         # Add text to the qr code (attempt to center at top)
         draw_canvas = ImageDraw.Draw(qr_code_img)
-        draw_canvas.text(((QR_SIZE[0] // 2) - 60, 0), data, font=FONT)
+        draw_canvas.text(((QR_SIZE[0] // 2) - 20, 0), data, font=FONT)
 
         yield qr_code_img
 
